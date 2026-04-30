@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Validation ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.createdAt == request.time &&
+             (data.get('displayName', '') is string) &&
+             (data.get('role', 'user') in ['user', 'admin']);
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && 
+                       isValidUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().role == existing().role; // Prevent self-elevation
+    }
+
+    // --- Training Sessions Validation ---
+    function isValidTrainingSession(data) {
+      return data.keys().hasAll(['sessionId', 'modelType', 'status', 'userId', 'timestamp']) &&
+             data.sessionId is string &&
+             data.modelType in ['ML', 'Security'] &&
+             data.status in ['pending', 'processing', 'completed', 'failed'] &&
+             data.userId == request.auth.uid &&
+             data.timestamp == request.time;
+    }
+
+    match /training_sessions/{sessionId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(sessionId) && isValidTrainingSession(incoming());
+      allow update: if isSignedIn() && (existing().userId == request.auth.uid) && 
+                       isValidTrainingSession(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       (existing().status != 'completed'); // Lock terminal state
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // --- Security Alerts Validation ---
+    function isValidSecurityAlert(data) {
+      return data.keys().hasAll(['type', 'message', 'riskScore', 'timestamp', 'userId']) &&
+             data.riskScore is number && data.riskScore >= 0 && data.riskScore <= 100 &&
+             data.userId == request.auth.uid &&
+             data.timestamp == request.time;
+    }
+
+    match /security_alerts/{alertId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidSecurityAlert(incoming());
+      allow update, delete: if false; // Alerts are immutable
+    }
+  }
+}

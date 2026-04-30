@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "TrainingSession": {
+      "title": "Model Training Session",
+      "description": "Log of a model training or retraining event",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "modelType": { "type": "string", "enum": ["ML", "Security"] },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "datasetName": { "type": "string" },
+        "parameters": { "type": "object" },
+        "result": { "type": "object" },
+        "progress": { "type": "number" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sessionId", "modelType", "status", "userId", "timestamp"]
+    },
+    "SecurityAlert": {
+      "title": "Persistent Security Alert",
+      "description": "Captured threat or anomaly",
+      "type": "object",
+      "properties": {
+        "alertId": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "riskScore": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["alertId", "type", "message", "riskScore", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection"
+    },
+    "/training_sessions/{sessionId}": {
+      "schema": "TrainingSession",
+      "description": "History of model training operations"
+    },
+    "/security_alerts/{alertId}": {
+      "schema": "SecurityAlert",
+      "description": "Global or user-specific security alerts"
+    }
+  }
+}
